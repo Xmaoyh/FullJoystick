@@ -220,8 +220,8 @@ public class Joystick extends SurfaceView implements
 
         if (mJoystickListener != null) {
             mJoystickListener.onTouch(this,
-                    (0.5f - ((mKnobX - mDownX) / (mRadius * 2 - mKnobSize))) * -2,
-                    (0.5f - ((mKnobY - mDownY) / (mRadius * 2 - mKnobSize))) * 2);
+                    px,
+                    py);
         }
 
         return true;

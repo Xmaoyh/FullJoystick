@@ -184,10 +184,10 @@ public class Joystick extends SurfaceView implements
                 break;
             case MotionEvent.ACTION_UP:
                 mIsShow = false;
-//                if (isAutoCentering()) {
-//                    mKnobX = Math.round((mBackgroundSize - mKnobSize) * 0.5f);
-//                    mKnobY = Math.round((mBackgroundSize - mKnobSize) * 0.5f);
-//                }
+                if (isAutoCentering()) {
+                    mKnobX = Math.round(mDownX - mKnobSize * 0.5f);
+                    mKnobY = Math.round(mDownY - mKnobSize * 0.5f);
+                }
                 break;
             default:
                 // Check if coordinates are in bounds. 检查是不是在范围以内

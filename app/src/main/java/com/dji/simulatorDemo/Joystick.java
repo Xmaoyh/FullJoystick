@@ -2,6 +2,7 @@ package com.dji.simulatorDemo;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
@@ -10,6 +11,7 @@ import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -20,13 +22,29 @@ import android.view.View;
 
 public class Joystick extends SurfaceView implements
         SurfaceHolder.Callback, View.OnTouchListener {
+    public final static int DIRECTION_LEFT = 1;
+    public final static int DIRECTION_RIGHT = 2;
+    /**
+     * 背景是左还是右
+     */
+    private int mBgOrientation = DIRECTION_LEFT;
 
     private Bitmap mJoystick;
+    private Bitmap mJoystickBg;
+    private Bitmap mJoystickArrow, mJoystickArrowHiLight;
     private SurfaceHolder mHolder;
     /**
      * 旋钮对应的显示范围
      */
     private Rect mKnobBounds;
+    /**
+     * 箭头对应的显示范围
+     */
+    private RectF mArrowBounds;
+    /**
+     * 背景对应的显示范围
+     */
+    private Rect mBgBounds;
 
     private JoystickThread mThread;
 
@@ -38,6 +56,10 @@ public class Joystick extends SurfaceView implements
      * 黑色旋钮大小
      */
     private int mKnobSize;
+    /**
+     * 指示箭头大小
+     */
+    private float mArrowWidth, mArrowHeight;
     /**
      * 背景大小——定死130
      */
@@ -63,6 +85,10 @@ public class Joystick extends SurfaceView implements
      */
     private float mDownX, mDownY;
     /**
+     * 手指移动时的X,Y坐标
+     */
+    private float mMoveX, mMoveY;
+    /**
      * 外框背景的画笔
      */
     private Paint mBgPaint;
@@ -78,12 +104,22 @@ public class Joystick extends SurfaceView implements
     }
 
     private void initGraphics(AttributeSet attrs) {
+        try {
+            TypedArray typedArray = getContext().obtainStyledAttributes(attrs, R.styleable.Joystick);
+            mBgOrientation = typedArray.getInt(R.styleable.Joystick_joy_bg, DIRECTION_LEFT);
+            typedArray.recycle();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         Resources res = getContext().getResources();
-        mJoystick = BitmapFactory.decodeResource(res, R.mipmap.joystick);
+        mJoystick = BitmapFactory.decodeResource(res, R.drawable.joystick_cover_circle);
+        mJoystickBg = BitmapFactory.decodeResource(res, mBgOrientation == DIRECTION_LEFT ? R.drawable.joystick_left : R.drawable.joystick_right);
+        mJoystickArrow = BitmapFactory.decodeResource(res, R.drawable.joystick_highlight);
+        mJoystickArrowHiLight = BitmapFactory.decodeResource(res, R.drawable.joystick_highlight_enable);
         mBgPaint = new Paint();
         mBgPaint.setAntiAlias(true);
         mBgPaint.setStrokeWidth(3f);
-        mBgPaint.setColor(Color.WHITE);
+        mBgPaint.setColor(Color.BLACK);
         mBgPaint.setStyle(Paint.Style.STROKE);
     }
 
@@ -106,7 +142,11 @@ public class Joystick extends SurfaceView implements
 
         mBackgroundSize = 130;
         mKnobSize = Math.round(mBackgroundSize * 0.8f);
+        mArrowWidth = mBackgroundSize * 0.8f;
+        mArrowHeight = mArrowWidth * 0.3f;
         mKnobBounds = new Rect();
+        mArrowBounds = new RectF();
+        mBgBounds = new Rect();
         mRadius = mBackgroundSize * 0.5f;
     }
 
@@ -163,17 +203,43 @@ public class Joystick extends SurfaceView implements
             //超出四周范围，不画
             return;
         }
-        mKnobBounds.set(mKnobX, mKnobY, mKnobX + mKnobSize, mKnobY + mKnobSize);
         //画旋钮
+        mKnobBounds.set(mKnobX, mKnobY, mKnobX + mKnobSize, mKnobY + mKnobSize);
         pCanvas.drawBitmap(mJoystick, null, mKnobBounds, null);
         //画旋钮范围的背景
-        pCanvas.drawCircle(mDownX, mDownY, mRadius + mKnobSize * 0.5f, mBgPaint);
+//        pCanvas.drawCircle(mDownX, mDownY, mRadius + mKnobSize * 0.5f, mBgPaint);
+        mBgBounds.set(Math.round(mDownX - (mRadius + mKnobSize * 0.5f)), Math.round(mDownY - (mRadius + mKnobSize * 0.5f)), Math.round(mDownX + (mRadius + mKnobSize * 0.5f)), Math.round(mDownY + (mRadius + mKnobSize * 0.5f)));
+        pCanvas.drawBitmap(mJoystickBg, null, mBgBounds, null);
+        //画箭头
+        double angle = Math.atan2(mMoveY - mDownY, mMoveX - mDownX);
+        float r = mBgBounds.width() * 0.5f;
+        float topX = (float) (mDownX + r * Math.cos(angle) - mArrowWidth * 0.6f);
+        float topY = (float) (mDownY + r * Math.sin(angle) - mArrowHeight * 0.6f);
+        float bottomX = (float) (mDownX + r * Math.cos(angle) + mArrowWidth * 0.6f);
+        float bottomY = (float) (mDownY + r * Math.sin(angle) + mArrowHeight * 0.6f);
+        float degree = (float) (Math.toDegrees(angle) + 90);
+        Log.d("degree", "degree==" + degree);
+        pCanvas.save();
+        pCanvas.rotate(degree, topX + (bottomX - topX) * 0.5f, topY + (bottomY - topY) * 0.5f);
+        mArrowBounds.set(topX, topY, bottomX, bottomY);
+        boolean is0 = degree >= 0 && degree <= 2 || degree >= 358 && degree <= 360;
+        boolean is90 = degree >= 88 && degree <= 92;
+        boolean is180 = degree >= 178 && degree <= 182;
+        boolean is270 = degree >= 268 && degree <= 272;
+        if (is0 || is90 || is180 || is270) {
+            pCanvas.drawBitmap(mJoystickArrowHiLight, null, mArrowBounds, null);
+        } else {
+            pCanvas.drawBitmap(mJoystickArrow, null, mArrowBounds, null);
+        }
+        pCanvas.restore();
     }
 
     @Override
     public boolean onTouch(final View arg0, final MotionEvent pEvent) {
         final float x = pEvent.getX();
         final float y = pEvent.getY();
+        mMoveX = x;
+        mMoveY = y;
         switch (pEvent.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 mDownX = x;
@@ -215,7 +281,10 @@ public class Joystick extends SurfaceView implements
             py = (float) (((1f - 1f - (((mKnobY + Math.round(mKnobSize / 2)) - Math.round(mDownY)) / (2 * mRadius - mKnobSize)))) / 2.5);
         }
 
-        Log.d("touch", "px===" + px + "   kx===" + mKnobX + "  dx===" + Math.round(mDownX)
+//        px = (0.5f - (mKnobX / (mRadius * 2 - mKnobSize))) * -2;
+//        py = (0.5f - (mKnobY / (mRadius * 2 - mKnobSize))) * 2;
+
+        Log.d("touch222", "px===" + px + "   kx===" + mKnobX + "  dx===" + Math.round(mDownX)
                 + "       py===" + py + "   ky===" + mKnobY + "  dy===" + Math.round(mDownY));
 
         if (mJoystickListener != null) {
